@@ -64,7 +64,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
 .nav-item.active{background:rgba(0,153,204,0.08);color:var(--accent);font-weight:700}
 .nav-item.active svg{stroke:var(--accent)}
 .nav-item svg{width:17px;height:17px;stroke:currentColor;stroke-width:2;fill:none;flex-shrink:0}
-.sidebar-footer{padding:14px 20px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.sidebar-footer{padding:10px 14px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
 .live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
 
@@ -387,7 +387,12 @@ tr:hover td:first-child{background:#f0f7fb}
       ASP Analytics
     </button>
   </nav>
-  <div class="sidebar-footer"><div class="live-dot"></div>Live • Google Sheets</div>
+  <div class="sidebar-footer">
+  <div style="display:flex;align-items:center;gap:6px;flex:1">
+    <div class="live-dot"></div>Live • Google Sheets
+  </div>
+  <button onclick="tryLiveRefresh()" style="background:rgba(0,153,204,0.1);border:1px solid rgba(0,153,204,0.3);color:#0099cc;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;font-family:Mulish,sans-serif;font-weight:600" title="Sync latest data from Google Sheets">↺ Sync</button>
+</div>
 </aside>
 
 <!-- MODAL -->
@@ -1121,16 +1126,21 @@ document.addEventListener('click',function(e){
 
 // ── LIVE REFRESH ──
 async function tryLiveRefresh(){
+  showRefreshBadge('🔄 Syncing live data...');
   async function safeFetch(url){
-    try{const r=await fetch(url,{cache:'no-cache'});if(r.ok)return await r.text();}catch(e){}
-    try{const r=await fetch('https://corsproxy.io/?'+encodeURIComponent(url));if(r.ok)return await r.text();}catch(e){}
+    // Try 1: Direct fetch (works on GitHub Pages)
+    try{const r=await fetch(url,{cache:'no-cache'});if(r.ok){const t=await r.text();if(t.length>500)return t;}}catch(e){}
+    // Try 2: corsproxy.io
+    try{const r=await fetch('https://corsproxy.io/?'+encodeURIComponent(url));if(r.ok){const t=await r.text();if(t.length>500)return t;}}catch(e){}
+    // Try 3: allorigins
+    try{const r=await fetch('https://api.allorigins.win/get?url='+encodeURIComponent(url));if(r.ok){const j=await r.json();if(j.contents&&j.contents.length>500)return j.contents;}}catch(e){}
     return null;
   }
   try{
     const [csv1,csv2]=await Promise.all([safeFetch(SHEET_HOSPITAL),safeFetch(SHEET_ASP)]);
-    if(!csv1||!csv2){showRefreshBadge('📦 Cached — '+EMBEDDED_DATA.hospitals.length+' hospitals');return;}
+    if(!csv1||!csv2){showRefreshBadge('📦 Cached '+EMBEDDED_DATA.hospitals.length+' hospitals — <span style="text-decoration:underline;cursor:pointer" onclick="tryLiveRefresh()">Retry sync</span>');return;}
     const live=processData(csv1,csv2);
-    if(live.hospitals.length<100){showRefreshBadge('⚠️ Live returned '+live.hospitals.length+' hospitals — keeping cached');return;}
+    if(live.hospitals.length<100){showRefreshBadge('⚠️ Live returned '+live.hospitals.length+' hospitals — keeping cached. <span style="text-decoration:underline;cursor:pointer" onclick="tryLiveRefresh()">Retry</span>');return;}
     RAW=live;
     const pg=document.querySelector('.page.active');
     if(pg&&pg.id==='page-hospital') renderHospitalPage();
@@ -1212,7 +1222,28 @@ function processData(csv1,csv2){
   const monthly=Object.values(mM).map(m=>({...m,avg_asp:m.asp_cnt>0?Math.round(m.asp_sum/m.asp_cnt):0}));
   const quarterly=Object.values(qM).map(q=>({...q,avg_asp:q.asp_cnt>0?Math.round(q.asp_sum/q.asp_cnt):0}));
   const asp=Object.values(aM).filter(a=>a.cases>=1&&!EXCL_CATS.includes((a.Category||'').toUpperCase().trim())).map(a=>({...a,avg_asp:Math.round(a.sum/a.cases)}));
-  return{hospitals,asp,monthly,quarterly,years:[...new Set(monthly.map(m=>m.Year))].sort(),cities:[...new Set(h2rows.map(r=>(r['City Bucket']||'').trim()).filter(Boolean))].sort(),categories:[...new Set(h2rows.map(r=>(r['Category']||'').trim()).filter(Boolean))].filter(c=>c&&!EXCL_CATS.includes(c.toUpperCase().trim())).sort(),insurers:[...new Set(h2rows.map(r=>(r['Insurance Name']||'').trim()).filter(Boolean))].sort(),tpa_cols:TPA_COLS,ins_cols:INS_COLS,stats:{total_hospitals:hospitals.length,active:hospitals.filter(h=>h.status==='Active').length,inactive:hospitals.filter(h=>h.status==='Inactive').length,hold:hospitals.filter(h=>h.status==='Hold').length,total_cases:tc,avg_asp:ac>0?Math.round(as/ac):0}};
+
+  // Build category-level monthly/quarterly for filtered trend chart
+  const mcM={},qcM={};
+  h2rows.forEach(row=>{
+    const app=cleanAmt(row['Approval Amount']);
+    const d=parseDate(row['DOA']);
+    if(!d||!app) return;
+    const yr=d.getFullYear(),mo=d.getMonth()+1,qt=`Q${Math.ceil(mo/3)}`;
+    const city=(row['City Bucket']||'Others').trim();
+    const cat=(row['Category']||'').trim();
+    if(EXCL_CATS.includes(cat.toUpperCase().trim())) return;
+    const mk=`${yr}|${mo}|${city}|${cat}`;
+    if(!mcM[mk]) mcM[mk]={Year:yr,Month:mo,CityBucket:city,Category:cat,asp_sum:0,cases:0};
+    mcM[mk].asp_sum+=app; mcM[mk].cases++;
+    const qk=`${yr}|${qt}|${city}|${cat}`;
+    if(!qcM[qk]) qcM[qk]={Year:yr,Quarter:qt,CityBucket:city,Category:cat,asp_sum:0,cases:0};
+    qcM[qk].asp_sum+=app; qcM[qk].cases++;
+  });
+  const monthly_cat=Object.values(mcM).map(m=>[m.Year,m.Month,m.CityBucket,m.Category,Math.round(m.asp_sum/m.cases),m.cases]);
+  const quarterly_cat=Object.values(qcM).map(q=>[q.Year,q.Quarter,q.CityBucket,q.Category,Math.round(q.asp_sum/q.cases),q.cases]);
+
+  return{hospitals,asp,monthly,quarterly,monthly_cat,quarterly_cat,years:[...new Set(monthly.map(m=>m.Year))].sort(),cities:[...new Set(h2rows.map(r=>(r['City Bucket']||'').trim()).filter(Boolean))].sort(),categories:[...new Set(h2rows.map(r=>(r['Category']||'').trim()).filter(Boolean))].filter(c=>c&&!EXCL_CATS.includes(c.toUpperCase().trim())).sort(),insurers:[...new Set(h2rows.map(r=>(r['Insurance Name']||'').trim()).filter(Boolean))].sort(),tpa_cols:TPA_COLS,ins_cols:INS_COLS,stats:{total_hospitals:hospitals.length,active:hospitals.filter(h=>h.status==='Active').length,inactive:hospitals.filter(h=>h.status==='Inactive').length,hold:hospitals.filter(h=>h.status==='Hold').length,total_cases:tc,avg_asp:ac>0?Math.round(as/ac):0}};
 }
 
 function loadAndInit(){
