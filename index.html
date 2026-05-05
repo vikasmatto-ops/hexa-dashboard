@@ -574,8 +574,7 @@ function filterByRegion(r){
 }
 
 function populateHFilters(){
-  const VALID_C = new Set(['Bangalore','DELHI','GURUGRAM','Mumbai','Hyderabad','Pune','Ahmedabad','FARIDABAD','NOIDA']);
-  const cities=[...new Set(RAW.hospitals.map(h=>h.city).filter(c=>c&&VALID_C.has(c)))].sort();
+  const cities=[...new Set(RAW.hospitals.map(h=>h.city).filter(Boolean))].sort();
   document.getElementById('h-city').innerHTML='<option value="">All Cities</option>'+cities.map(c=>`<option>${c}</option>`).join('');
   document.getElementById('h-insurer').innerHTML='<option value="">All Insurers</option>'+RAW.ins_cols.map(i=>`<option>${i}</option>`).join('');
   document.getElementById('h-region').innerHTML='<option value="">All Regions</option>'+['North','South','West','East','Central'].map(r=>`<option>${r}</option>`).join('');
@@ -939,43 +938,46 @@ function resetASPFilters(){
 
 // ── BOOT: fetch live data then init ──
 function loadAndInit(){
-  // Step 1: Load embedded data IMMEDIATELY — no waiting, no network needed
   RAW = EMBEDDED_DATA;
   showLoader(false);
   renderHospitalPage();
-  // Step 2: Try live refresh silently in background (won't block UI)
-  setTimeout(tryLiveRefresh, 2000);
+  setTimeout(tryLiveRefresh, 1500);
 }
 
 async function tryLiveRefresh(){
   const SHEET_H = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRrd9wkjq0MLRYCp5k2fBRnHdjOpeTgGuL6eLwIlQuAAdK0PsANa9zGiiF9Owh-BsC_sRPkdl1S0PC8/pub?gid=0&single=true&output=csv";
   const SHEET_A = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRrd9wkjq0MLRYCp5k2fBRnHdjOpeTgGuL6eLwIlQuAAdK0PsANa9zGiiF9Owh-BsC_sRPkdl1S0PC8/pub?gid=1167367380&single=true&output=csv";
-  try {
-    // Direct fetch first (works from GitHub Pages, no CORS issue)
-    const [r1, r2] = await Promise.all([
-      fetch(SHEET_H, {cache:'no-cache'}),
-      fetch(SHEET_A, {cache:'no-cache'})
-    ]);
-    if(!r1.ok || !r2.ok) throw new Error('fetch failed');
-    const [csv1, csv2] = await Promise.all([r1.text(), r2.text()]);
-    RAW = processData(csv1, csv2);
-    renderHospitalPage();
-    showRefreshBadge('✓ Live data loaded from Google Sheets');
-  } catch(e){
-    // Try corsproxy as fallback
+  
+  async function doFetch(url){
+    // Try direct first (works on GitHub Pages)
     try {
-      const proxy = 'https://corsproxy.io/?';
-      const [r1, r2] = await Promise.all([
-        fetch(proxy + encodeURIComponent(SHEET_H)),
-        fetch(proxy + encodeURIComponent(SHEET_A))
-      ]);
-      const [csv1, csv2] = await Promise.all([r1.text(), r2.text()]);
-      RAW = processData(csv1, csv2);
-      renderHospitalPage();
-      showRefreshBadge('✓ Live data loaded');
-    } catch(e2){
-      showRefreshBadge('📦 Using cached data — open from GitHub for live updates');
+      const r = await fetch(url, {cache:'no-cache'});
+      if(r.ok) return await r.text();
+    } catch(e){}
+    // Fallback to corsproxy
+    const r = await fetch('https://corsproxy.io/?' + encodeURIComponent(url));
+    if(r.ok) return await r.text();
+    throw new Error('All fetches failed');
+  }
+
+  try {
+    const [csv1, csv2] = await Promise.all([doFetch(SHEET_H), doFetch(SHEET_A)]);
+    const newRAW = processData(csv1, csv2);
+    
+    // Validate — if we got less than 50 hospitals something went wrong, keep embedded
+    if(newRAW.hospitals.length < 50){
+      showRefreshBadge('⚠️ Live data invalid, using cached data');
+      return;
     }
+    
+    RAW = newRAW;
+    // Re-render current page
+    const activePage = document.querySelector('.page.active');
+    if(activePage && activePage.id === 'page-hospital') renderHospitalPage();
+    else if(activePage && activePage.id === 'page-asp') renderASPPage();
+    showRefreshBadge('✓ Live data loaded — ' + RAW.hospitals.length + ' hospitals');
+  } catch(e){
+    showRefreshBadge('📦 Cached data — ' + EMBEDDED_DATA.hospitals.length + ' hospitals');
   }
 }
 
