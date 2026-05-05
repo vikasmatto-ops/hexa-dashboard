@@ -1086,25 +1086,36 @@ function processData(csv1, csv2){
     'HDFC ERGO','ICICI Lombard','Iffco Tokio','Kotak General','LIBERTY','MAGMA HDI',
     'Max Bupa','NAVI','Reliance General','Star Health','Zuno Insurance','SBI','TATA AIG','Universal sompo'];
 
-  const VALID_CITIES = ['DELHI','NOIDA','FARIDABAD','GURUGRAM','GURGAON','MUMBAI','PUNE',
-    'AHMEDABAD','BANGALORE','HYDERABAD','CHENNAI','KOLKATA'];
+  // Normalize any city spelling to standard form
+  const CITY_NORM = {
+    'BANGALORE':'Bangalore','BENGALURU':'Bangalore',
+    'DELHI':'Delhi','NEW DELHI':'Delhi',
+    'GURUGRAM':'Gurugram','GURGAON':'Gurugram',
+    'MUMBAI':'Mumbai','BOMBAY':'Mumbai',
+    'HYDERABAD':'Hyderabad',
+    'PUNE':'Pune',
+    'AHMEDABAD':'Ahmedabad',
+    'FARIDABAD':'Faridabad',
+    'NOIDA':'Noida',
+    'KOLKATA':'Kolkata','CALCUTTA':'Kolkata',
+    'CHENNAI':'Chennai','MADRAS':'Chennai',
+  };
+
+  function normalizeCity(raw){
+    if(!raw) return null;
+    const up = raw.trim().toUpperCase();
+    return CITY_NORM[up] || null;
+  }
 
   function getRegion(city){
-    const c=(city||'').toUpperCase().trim();
-    if(['DELHI','NOIDA','FARIDABAD','GURUGRAM','GURGAON'].includes(c)) return 'North';
-    if(['MUMBAI','PUNE','AHMEDABAD'].includes(c)) return 'West';
-    if(['BANGALORE','HYDERABAD','CHENNAI'].includes(c)) return 'South';
-    if(['KOLKATA'].includes(c)) return 'East';
+    const c = (city||'').toUpperCase().trim();
+    if(['DELHI','NOIDA','FARIDABAD','GURUGRAM','GURGAON','NEW DELHI'].includes(c)) return 'North';
+    if(['MUMBAI','PUNE','AHMEDABAD','BOMBAY'].includes(c)) return 'West';
+    if(['BANGALORE','BENGALURU','HYDERABAD','CHENNAI','MADRAS'].includes(c)) return 'South';
+    if(['KOLKATA','CALCUTTA'].includes(c)) return 'East';
     return 'Central';
   }
-  function getRegionNorm(city){
-    const c=(city||'').toUpperCase().trim();
-    if(['DELHI','NOIDA','FARIDABAD','GURUGRAM','GURGAON'].includes(c)) return 'North';
-    if(['MUMBAI','PUNE','AHMEDABAD'].includes(c)) return 'West';
-    if(['BANGALORE','HYDERABAD','CHENNAI'].includes(c)) return 'South';
-    if(['KOLKATA'].includes(c)) return 'East';
-    return 'Central';
-  }
+
   function catStatus(s){
     const v=(s||'').trim().toLowerCase();
     if(v==='active') return 'Active';
@@ -1112,43 +1123,35 @@ function processData(csv1, csv2){
     if(v==='hold') return 'Hold';
     return 'Unknown';
   }
+
   function empVal(v){
     const u=(v||'').trim().toUpperCase();
     return u==='YES'||u==='Y'?'Yes':u==='NO'||u==='N'?'No':'';
   }
 
-  // Process hospitals
-  const VALID_CITIES_SET = new Set(['DELHI','NOIDA','FARIDABAD','GURUGRAM','GURGAON',
-    'MUMBAI','PUNE','AHMEDABAD','BANGALORE','HYDERABAD','CHENNAI','KOLKATA',
-    'Bangalore','Mumbai','Hyderabad','Pune','Ahmedabad']);
-
   const hospitals = [];
   h1rows.forEach(row => {
     const name = (row['Hospital Name']||'').trim();
     if(!name) return;
-    // Skip rows that look like garbage (comments bleeding into data)
-    if(name.length > 100) return;  // hospital names shouldn't be that long
-    if(name.includes('Yes,') || name.includes('No,')) return;  // empanelment data bled in
-    const city = (row['CITY']||'').trim();
-    // Only accept known valid cities
-    if(!VALID_CITIES_SET.has(city.toUpperCase())) return;
+    if(name.length > 150) return; // garbage row
+    if(/^(Yes|No),/.test(name)) return; // empanelment data bled in
+
+    const rawCity = (row['CITY']||'').trim();
+    const city = normalizeCity(rawCity);
+    if(!city) return; // skip rows with invalid/unknown city
+
     const tpa={}, ins={};
     TPA_COLS.forEach(c=>{ const v=empVal(row[c]); if(v) tpa[c]=v; });
     INS_COLS.forEach(c=>{ const v=empVal(row[c]); if(v) ins[c]=v; });
     const yes=Object.values({...tpa,...ins}).filter(v=>v==='Yes').length;
     const total=TPA_COLS.length+INS_COLS.length;
-    // Skip rows where city is not a valid city (garbage rows from sheet)
-    const cityUpper = city.toUpperCase().trim();
-    if(!VALID_CITIES.includes(cityUpper) && cityUpper !== '') {
-      // Check if it looks like a city at all
-      if(city.length > 20 || city.includes(',') || city.includes('Yes') || city.includes('No')) continue;
-    }
+
     hospitals.push({
       name, city, area:(row['AREA']||'').trim(),
       region: getRegion(rawCity),
       status: catStatus(row['Active status']||''),
       mop: (row['MOP Status']||'').trim(),
-      ins_comments:(row['Insurance Comments']||'').trim(),
+      ins_comments:(row['Insurance Comments']||row['Insurance Comments ']||'').trim(),
       city_comments:(row['City Comments ']||row['City Comments']||'').trim(),
       doc_comments:(row['Doctors team comments ']||row['Doctors team comments']||'').trim(),
       remarks:(row['Remarks']||'').trim(),
@@ -1160,26 +1163,27 @@ function processData(csv1, csv2){
   // Process ASP data
   function cleanAmt(v){
     if(!v) return null;
-    const s=String(v).replace(/₹/g,'').replace(/,/g,'').trim();
+    const s=String(v).replace(/[₹,\s]/g,'').trim();
     if(!s||s.startsWith('#')) return null;
     const n=parseFloat(s);
-    return isNaN(n)?null:n;
+    return isNaN(n)||n<=0?null:n;
   }
+
   function parseDate(v){
     if(!v) return null;
-    const fmts = [
-      {re:/^([A-Za-z]+)\s+(\d+),\s*(\d{4})$/, fn:(m)=>new Date(`${m[1]} ${m[2]}, ${m[3]}`)},
-      {re:/^(\d+)\s+([A-Za-z]+),\s*(\d{4})$/, fn:(m)=>new Date(`${m[2]} ${m[1]}, ${m[3]}`)}
+    const s=String(v).trim();
+    const fmts=[
+      {re:/^([A-Za-z]+)\s+(\d+),\s*(\d{4})$/,fn:m=>new Date(`${m[1]} ${m[2]}, ${m[3]}`)},
+      {re:/^(\d+)\s+([A-Za-z]+),\s*(\d{4})$/,fn:m=>new Date(`${m[2]} ${m[1]}, ${m[3]}`)}
     ];
     for(const {re,fn} of fmts){
-      const m=String(v).trim().match(re);
-      if(m){ const d=fn(m); if(!isNaN(d)) return d; }
+      const m=s.match(re);
+      if(m){const d=fn(m);if(!isNaN(d))return d;}
     }
     return null;
   }
 
-  const MONTH_NAMES=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const aspMap={}, monthMap={}, quarterMap={};
+  const monthMap={}, quarterMap={}, aspMap={};
   let totalCases=0, aspSum=0, aspCount=0;
 
   h2rows.forEach(row => {
@@ -1195,21 +1199,17 @@ function processData(csv1, csv2){
     const insurer=(row['Insurance Name']||'').trim();
     const hospital=(row['Hospital Name']||'').trim();
 
-    // Monthly trend
     const mk=`${year}|${month}|${city}`;
     if(!monthMap[mk]) monthMap[mk]={Year:year,Month:month,CityBucket:city,total_cases:0,asp_sum:0,asp_cnt:0};
     monthMap[mk].total_cases++;
-    if(approval&&approval>0){monthMap[mk].asp_sum+=approval;monthMap[mk].asp_cnt++;}
+    if(approval){monthMap[mk].asp_sum+=approval;monthMap[mk].asp_cnt++;}
 
-    // Quarterly
     const qk=`${year}|${quarter}|${city}`;
     if(!quarterMap[qk]) quarterMap[qk]={Year:year,Quarter:quarter,CityBucket:city,total_cases:0,asp_sum:0,asp_cnt:0};
     quarterMap[qk].total_cases++;
-    if(approval&&approval>0){quarterMap[qk].asp_sum+=approval;quarterMap[qk].asp_cnt++;}
+    if(approval){quarterMap[qk].asp_sum+=approval;quarterMap[qk].asp_cnt++;}
 
-    // ASP by combo
-    if(approval&&approval>0){
-      const hospShort=hospital.split(',')[0].trim();
+    if(approval){
       const ak=`${city}||${insurer}||${category}||${hospital}`;
       if(!aspMap[ak]) aspMap[ak]={CityBucket:city,InsuranceName:insurer,Category:category,HospitalName:hospital,sum:0,cases:0};
       aspMap[ak].sum+=approval; aspMap[ak].cases++;
@@ -1217,21 +1217,27 @@ function processData(csv1, csv2){
     }
   });
 
+  const EXCL_CATS = ["CARDIOLOGY","ENDOCRINOLOGY","INTERNAL MEDICINE","NEUROLOGY",
+    "NEUROSURGERY","INTERNAL MEDICNE","PULMONOLOGY","SURGICAL ONCOLOGY",
+    "GASTROENTOLOGY","GASTROINTESTINAL SURGERY","OPHTHALMOLOGY",
+    "GASTROENTEROLOGY","OPTHALMOLOGY","INTERNAL MEDICIN"];
+
   const monthly=Object.values(monthMap).map(m=>({...m,avg_asp:m.asp_cnt>0?Math.round(m.asp_sum/m.asp_cnt):0}));
   const quarterly=Object.values(quarterMap).map(q=>({...q,avg_asp:q.asp_cnt>0?Math.round(q.asp_sum/q.asp_cnt):0}));
   const asp=Object.values(aspMap)
-    .filter(a=>a.cases>=1)
+    .filter(a=>a.cases>=1 && !EXCL_CATS.includes((a.Category||'').toUpperCase().trim()))
     .map(a=>({...a,avg_asp:Math.round(a.sum/a.cases)}));
 
   const allCities=[...new Set(h2rows.map(r=>(r['City Bucket']||'').trim()).filter(Boolean))].sort();
-  const allCats=[...new Set(h2rows.map(r=>(r['Category']||'').trim()).filter(Boolean))].sort();
+  const allCats=[...new Set(h2rows.map(r=>(r['Category']||'').trim()).filter(Boolean))]
+    .filter(c=>c&&!EXCL_CATS.includes(c.toUpperCase().trim())).sort();
   const allIns=[...new Set(h2rows.map(r=>(r['Insurance Name']||'').trim()).filter(Boolean))].sort();
   const allYears=[...new Set(monthly.map(m=>m.Year))].sort();
 
   return {
-    hospitals,asp,monthly,quarterly,
-    years:allYears,cities:allCities,categories:allCats,insurers:allIns,
-    tpa_cols:TPA_COLS,ins_cols:INS_COLS,
+    hospitals, asp, monthly, quarterly,
+    years:allYears, cities:allCities, categories:allCats, insurers:allIns,
+    tpa_cols:TPA_COLS, ins_cols:INS_COLS,
     stats:{
       total_hospitals:hospitals.length,
       active:hospitals.filter(h=>h.status==='Active').length,
@@ -1243,62 +1249,4 @@ function processData(csv1, csv2){
   };
 }
 
-loadAndInit();
 
-// ── SEARCHABLE HOSPITAL DROPDOWN ──
-window._selectedHospital = '';
-
-function renderHospDropdownList(query){
-  const list = document.getElementById('hospDropdownList');
-  const hospitals = window._aspHospitals || [];
-  const filtered = query
-    ? hospitals.filter(h=>h.toLowerCase().includes(query.toLowerCase()))
-    : hospitals;
-  const items = [{val:'',label:'All Hospitals'}, ...filtered.map(h=>({val:h,label:h}))];
-  list.innerHTML = items.map(item=>`
-    <div onclick="selectHospital('${item.val.replace(/'/g,"\'")}','${item.label.replace(/'/g,"\'")}')"
-      style="padding:8px 12px;font-size:12px;cursor:pointer;color:var(--text);
-             background:${window._selectedHospital===item.val?'rgba(0,153,204,0.08)':'transparent'};
-             font-weight:${window._selectedHospital===item.val?'700':'400'}"
-      onmouseover="this.style.background='rgba(0,153,204,0.06)'"
-      onmouseout="this.style.background='${window._selectedHospital===item.val?'rgba(0,153,204,0.08)':'transparent'}'"
-    >${item.label.length>38?item.label.slice(0,38)+'…':item.label}</div>
-  `).join('');
-  if(!items.length) list.innerHTML='<div style="padding:12px;color:var(--muted);font-size:12px;text-align:center">No hospitals found</div>';
-}
-
-function selectHospital(val, label){
-  window._selectedHospital = val;
-  document.getElementById('hospDropdownBtn').innerHTML =
-    `${(label||'All Hospitals').length>28?(label||'All Hospitals').slice(0,28)+'…':(label||'All Hospitals')}
-     <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:10px">▼</span>`;
-  document.getElementById('hospDropdownPanel').style.display='none';
-  document.getElementById('hospSearch').value='';
-  renderHospDropdownList('');
-  renderASP();
-}
-
-function toggleHospDropdown(){
-  const panel = document.getElementById('hospDropdownPanel');
-  const isOpen = panel.style.display==='block';
-  // Close all dropdowns first
-  document.querySelectorAll('#hospDropdownPanel').forEach(p=>p.style.display='none');
-  if(!isOpen){
-    panel.style.display='block';
-    document.getElementById('hospSearch').focus();
-  }
-}
-
-function filterHospDropdown(){
-  const q = document.getElementById('hospSearch').value;
-  renderHospDropdownList(q);
-}
-
-// Close dropdown when clicking outside
-document.addEventListener('click', function(e){
-  const wrap = document.getElementById('hospDropdownWrap');
-  if(wrap && !wrap.contains(e.target)){
-    document.getElementById('hospDropdownPanel').style.display='none';
-  }
-});
-</script></body></html>
