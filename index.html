@@ -946,6 +946,51 @@ function loadAndInit(){
   setTimeout(tryLiveRefresh, 2000);
 }
 
+async function tryLiveRefresh(){
+  const SHEET_H = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRrd9wkjq0MLRYCp5k2fBRnHdjOpeTgGuL6eLwIlQuAAdK0PsANa9zGiiF9Owh-BsC_sRPkdl1S0PC8/pub?gid=0&single=true&output=csv";
+  const SHEET_A = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRrd9wkjq0MLRYCp5k2fBRnHdjOpeTgGuL6eLwIlQuAAdK0PsANa9zGiiF9Owh-BsC_sRPkdl1S0PC8/pub?gid=1167367380&single=true&output=csv";
+  try {
+    // Direct fetch first (works from GitHub Pages, no CORS issue)
+    const [r1, r2] = await Promise.all([
+      fetch(SHEET_H, {cache:'no-cache'}),
+      fetch(SHEET_A, {cache:'no-cache'})
+    ]);
+    if(!r1.ok || !r2.ok) throw new Error('fetch failed');
+    const [csv1, csv2] = await Promise.all([r1.text(), r2.text()]);
+    RAW = processData(csv1, csv2);
+    renderHospitalPage();
+    showRefreshBadge('✓ Live data loaded from Google Sheets');
+  } catch(e){
+    // Try corsproxy as fallback
+    try {
+      const proxy = 'https://corsproxy.io/?';
+      const [r1, r2] = await Promise.all([
+        fetch(proxy + encodeURIComponent(SHEET_H)),
+        fetch(proxy + encodeURIComponent(SHEET_A))
+      ]);
+      const [csv1, csv2] = await Promise.all([r1.text(), r2.text()]);
+      RAW = processData(csv1, csv2);
+      renderHospitalPage();
+      showRefreshBadge('✓ Live data loaded');
+    } catch(e2){
+      showRefreshBadge('📦 Using cached data — open from GitHub for live updates');
+    }
+  }
+}
+
+function showRefreshBadge(msg){
+  let b = document.getElementById('refreshBadge');
+  if(!b){
+    b = document.createElement('div');
+    b.id = 'refreshBadge';
+    b.style.cssText = 'position:fixed;bottom:16px;right:16px;background:#1a2332;color:white;padding:10px 16px;border-radius:10px;font-size:12px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.2);transition:opacity 0.5s;font-family:Mulish,sans-serif;display:flex;align-items:center;gap:8px';
+    document.body.appendChild(b);
+  }
+  b.innerHTML = msg;
+  b.style.opacity = '1';
+  setTimeout(()=>{ b.style.opacity='0'; }, 5000);
+}
+
 function showLoader(show){
   let el = document.getElementById('loader');
   if(!el){
