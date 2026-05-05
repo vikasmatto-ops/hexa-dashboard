@@ -574,7 +574,8 @@ function filterByRegion(r){
 }
 
 function populateHFilters(){
-  const cities=[...new Set(RAW.hospitals.map(h=>h.city).filter(Boolean))].sort();
+  const VALID_C = new Set(['Bangalore','DELHI','GURUGRAM','Mumbai','Hyderabad','Pune','Ahmedabad','FARIDABAD','NOIDA']);
+  const cities=[...new Set(RAW.hospitals.map(h=>h.city).filter(c=>c&&VALID_C.has(c)))].sort();
   document.getElementById('h-city').innerHTML='<option value="">All Cities</option>'+cities.map(c=>`<option>${c}</option>`).join('');
   document.getElementById('h-insurer').innerHTML='<option value="">All Insurers</option>'+RAW.ins_cols.map(i=>`<option>${i}</option>`).join('');
   document.getElementById('h-region').innerHTML='<option value="">All Regions</option>'+['North','South','West','East','Central'].map(r=>`<option>${r}</option>`).join('');
@@ -1074,6 +1075,9 @@ function processData(csv1, csv2){
     'HDFC ERGO','ICICI Lombard','Iffco Tokio','Kotak General','LIBERTY','MAGMA HDI',
     'Max Bupa','NAVI','Reliance General','Star Health','Zuno Insurance','SBI','TATA AIG','Universal sompo'];
 
+  const VALID_CITIES = ['DELHI','NOIDA','FARIDABAD','GURUGRAM','GURGAON','MUMBAI','PUNE',
+    'AHMEDABAD','BANGALORE','HYDERABAD','CHENNAI','KOLKATA'];
+
   function getRegion(city){
     const c=(city||'').toUpperCase().trim();
     if(['DELHI','NOIDA','FARIDABAD','GURUGRAM','GURGAON'].includes(c)) return 'North';
@@ -1095,16 +1099,30 @@ function processData(csv1, csv2){
   }
 
   // Process hospitals
+  const VALID_CITIES_SET = new Set(['DELHI','NOIDA','FARIDABAD','GURUGRAM','GURGAON',
+    'MUMBAI','PUNE','AHMEDABAD','BANGALORE','HYDERABAD','CHENNAI','KOLKATA']);
+
   const hospitals = [];
   h1rows.forEach(row => {
     const name = (row['Hospital Name']||'').trim();
     if(!name) return;
+    // Skip rows that look like garbage (comments bleeding into data)
+    if(name.length > 100) return;  // hospital names shouldn't be that long
+    if(name.includes('Yes,') || name.includes('No,')) return;  // empanelment data bled in
     const city = (row['CITY']||'').trim();
+    // Only accept known valid cities
+    if(!VALID_CITIES_SET.has(city.toUpperCase())) return;
     const tpa={}, ins={};
     TPA_COLS.forEach(c=>{ const v=empVal(row[c]); if(v) tpa[c]=v; });
     INS_COLS.forEach(c=>{ const v=empVal(row[c]); if(v) ins[c]=v; });
     const yes=Object.values({...tpa,...ins}).filter(v=>v==='Yes').length;
     const total=TPA_COLS.length+INS_COLS.length;
+    // Skip rows where city is not a valid city (garbage rows from sheet)
+    const cityUpper = city.toUpperCase().trim();
+    if(!VALID_CITIES.includes(cityUpper) && cityUpper !== '') {
+      // Check if it looks like a city at all
+      if(city.length > 20 || city.includes(',') || city.includes('Yes') || city.includes('No')) continue;
+    }
     hospitals.push({
       name, city, area:(row['AREA']||'').trim(),
       region: getRegion(city),
