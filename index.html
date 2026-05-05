@@ -775,8 +775,10 @@ function renderASP(){
   const totalC=data.reduce((s,d)=>s+d.cases,0);
   const avgA=totalC>0?Math.round(data.reduce((s,d)=>s+(d.avg_asp*d.cases),0)/totalC):0;
   document.getElementById('asp-count').textContent=`(${data.length} hospital-insurer combinations • ${totalC.toLocaleString()} cases)`;
-  // Show total cases from sheet (all rows), not just approved ones
-  const ce=document.getElementById('kpi-cases'); if(ce) ce.textContent=(RAW.stats.total_cases||totalC).toLocaleString();
+  // Show filtered case count when filters active, else total
+  const hasFilters = f.city||f.category||f.insurer||f.hospital||f.year||f.quarter||f.month;
+  const ce=document.getElementById('kpi-cases'); 
+  if(ce) ce.textContent=hasFilters?totalC.toLocaleString():RAW.stats.total_cases.toLocaleString();
   const ae=document.getElementById('kpi-asp'); if(ae) ae.textContent=avgA>0?'₹'+avgA.toLocaleString('en-IN'):'₹'+RAW.stats.avg_asp.toLocaleString('en-IN');
   const se=document.getElementById('asp-summary'); if(se) se.innerHTML=`<span style="font-weight:700;color:var(--text)">${totalC.toLocaleString()} cases</span> • Avg: <span style="color:var(--accent);font-weight:700">₹${avgA.toLocaleString('en-IN')}</span>`;
 
@@ -888,6 +890,7 @@ function renderTrend(f){
     d.sort((a,b)=>a.Year-b.Year||(a.Quarter||'').localeCompare(b.Quarter||''));
     labels=d.map(x=>`${x.Quarter} ${String(x.Year).slice(2)}`);
     values=d.map(x=>x.avg_asp);
+    window._trendCases=d.map(x=>x.cases||x.c||'');
   } else {
     const ym={};
     let src = hasCat && RAW.monthly_cat
@@ -903,6 +906,7 @@ function renderTrend(f){
     });
     labels=Object.keys(ym).sort();
     values=labels.map(y=>ym[y].c?Math.round(ym[y].s/ym[y].c):0);
+    window._trendCases=labels.map(y=>ym[y].c||'');
   }
   trendChart=new Chart(ctx,{
     type:'line',
@@ -915,7 +919,7 @@ function renderTrend(f){
     }]},
     options:{
       responsive:true,
-      layout:{padding:{top:28}},
+      layout:{padding:{top:34}},
       plugins:{
         legend:{display:false},
         datalabels:{display:false},
@@ -1022,7 +1026,7 @@ function renderCatChart(data){
       labels:sorted.map(x=>x.ins.length>18?x.ins.slice(0,18)+'…':x.ins),
       datasets:[{
         data:sorted.map(x=>x.asp),
-        backgroundColor:sorted.map(x=>x.asp===Math.max(...sorted.map(s=>s.asp))?'rgba(0,153,204,0.9)':'rgba(0,153,204,0.45)'),
+        backgroundColor:sorted.map(x=>x.asp===Math.max(...sorted.map(s=>s.asp))?'rgba(124,58,237,0.9)':'rgba(124,58,237,0.5)'),
         borderRadius:4
       }]
     },
@@ -1043,7 +1047,7 @@ function renderCatChart(data){
       },
       animation:{onComplete:function(){
         const chart=this; const cctx=chart.ctx; cctx.save();
-        cctx.font='bold 9px DM Mono,monospace'; cctx.fillStyle='#0099cc'; cctx.textAlign='left';
+        cctx.font='bold 9px DM Mono,monospace'; cctx.fillStyle='#7c3aed'; cctx.textAlign='left';
         chart.data.datasets[0].data.forEach((val,i)=>{
           const meta=chart.getDatasetMeta(0);
           const bar=meta.data[i];
