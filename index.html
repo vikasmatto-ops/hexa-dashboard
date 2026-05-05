@@ -6,6 +6,7 @@
 <title>HexaHealth — Hospital Intelligence Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=Mulish:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -519,7 +520,10 @@ const SHEET_HOSPITAL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRrd9wkj
 const SHEET_ASP = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRrd9wkjq0MLRYCp5k2fBRnHdjOpeTgGuL6eLwIlQuAAdK0PsANa9zGiiF9Owh-BsC_sRPkdl1S0PC8/pub?gid=1167367380&single=true&output=csv";
 
 let RAW = null;
+Chart.register(ChartDataLabels);
 const MONTHS=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function toMonthObj(a){return Array.isArray(a)?{Year:a[0],Month:a[1],CityBucket:a[2],total_cases:a[3],avg_asp:a[4]}:a;}
+function toQuartObj(a){return Array.isArray(a)?{Year:a[0],Quarter:a[1],CityBucket:a[2],total_cases:a[3],avg_asp:a[4]}:a;}
 const REGION_ICONS={North:'🔵',South:'🟢',West:'🟠',East:'🟣',Central:'🟡'};
 let selectedRegion='';
 let trendChart,hospChart,catChart,trendMode='monthly';
@@ -656,14 +660,13 @@ function openModal(name){
       </div>
     </div>
     <div class="modal-body">
-      ${h.ins_comments||h.city_comments||h.doc_comments||h.remarks?`
       <div style="margin-bottom:18px">
         <div class="section-head">Comments & Remarks</div>
-        ${h.ins_comments?`<div class="comment-box"><strong>Insurance Comments</strong>${h.ins_comments}</div>`:''}
-        ${h.city_comments?`<div class="comment-box"><strong>City Comments</strong>${h.city_comments}</div>`:''}
-        ${h.doc_comments?`<div class="comment-box"><strong>Doctors Team Comments</strong>${h.doc_comments}</div>`:''}
-        ${h.remarks?`<div class="comment-box"><strong>Remarks</strong>${h.remarks}</div>`:''}
-      </div>`:''}
+        ${h.ins_comments?`<div class="comment-box" style="border-left-color:#dc2626"><strong>🔴 Insurance Comments</strong>${h.ins_comments}</div>`:''}
+        ${h.city_comments?`<div class="comment-box" style="border-left-color:#16a34a"><strong>🟢 City Comments</strong>${h.city_comments}</div>`:'<div style="font-size:11px;color:var(--muted);margin-bottom:6px">🟢 City Comments — not yet added</div>'}
+        ${h.doc_comments?`<div class="comment-box" style="border-left-color:#0099cc"><strong>🔵 Doctors Team Comments</strong>${h.doc_comments}</div>`:'<div style="font-size:11px;color:var(--muted);margin-bottom:6px">🔵 Doctors Team Comments — not yet added</div>'}
+        ${h.remarks?`<div class="comment-box" style="border-left-color:#f59e0b"><strong>📝 Remarks</strong>${h.remarks}</div>`:''}
+      </div>
       <div class="emp-modal-grid">
         <div>
           <div class="section-head">TPA Empanelment</div>
@@ -802,32 +805,66 @@ function renderTrend(f){
   if(trendChart) trendChart.destroy();
   const ctx=document.getElementById('trendChart').getContext('2d');
   let labels=[],values=[];
-function toMonthObj(a){return Array.isArray(a)?{Year:a[0],Month:a[1],CityBucket:a[2],total_cases:a[3],avg_asp:a[4]}:a;}
-  function toQuartObj(a){return Array.isArray(a)?{Year:a[0],Quarter:a[1],CityBucket:a[2],total_cases:a[3],avg_asp:a[4]}:a;}
+  // monthly stored as [year,month,city,cases,avg_asp]
+  // quarterly stored as [year,quarter,city,cases,avg_asp]
   if(trendMode==='monthly'){
-    let d=[...RAW.monthly];
+    let d=RAW.monthly.map(a=>Array.isArray(a)?{Year:a[0],Month:a[1],CityBucket:a[2],total_cases:a[3],avg_asp:a[4]}:a);
     if(f.city) d=d.filter(x=>x.CityBucket===f.city);
+    if(f.year) d=d.filter(x=>String(x.Year)===String(f.year));
+    if(f.month) d=d.filter(x=>String(x.Month)===String(f.month));
+    d=d.filter(x=>x.avg_asp>0);
     d.sort((a,b)=>a.Year-b.Year||a.Month-b.Month);
-    labels=d.map(x=>`${MONTHS[x.Month]} ${String(x.Year).slice(2)}`);
+    labels=d.map(x=>`${MONTHS[x.Month]||'?'} ${String(x.Year).slice(2)}`);
     values=d.map(x=>x.avg_asp);
   } else if(trendMode==='quarterly'){
-    let d=[...RAW.quarterly];
+    let d=RAW.quarterly.map(a=>Array.isArray(a)?{Year:a[0],Quarter:a[1],CityBucket:a[2],total_cases:a[3],avg_asp:a[4]}:a);
     if(f.city) d=d.filter(x=>x.CityBucket===f.city);
+    if(f.year) d=d.filter(x=>String(x.Year)===String(f.year));
+    if(f.quarter) d=d.filter(x=>x.Quarter===f.quarter);
+    d=d.filter(x=>x.avg_asp>0);
     d.sort((a,b)=>a.Year-b.Year||(a.Quarter||'').localeCompare(b.Quarter||''));
     labels=d.map(x=>`${x.Quarter} ${String(x.Year).slice(2)}`);
     values=d.map(x=>x.avg_asp);
   } else {
     const ym={};
-    let d=[...RAW.monthly];
+    let d=RAW.monthly.map(a=>Array.isArray(a)?{Year:a[0],Month:a[1],CityBucket:a[2],total_cases:a[3],avg_asp:a[4]}:a);
     if(f.city) d=d.filter(x=>x.CityBucket===f.city);
-    d.forEach(x=>{if(!ym[x.Year]){ym[x.Year]={s:0,c:0};} ym[x.Year].s+=x.avg_asp*x.cases; ym[x.Year].c+=x.cases;});
+    d=d.filter(x=>x.avg_asp>0);
+    d.forEach(x=>{if(!ym[x.Year]){ym[x.Year]={s:0,c:0};} ym[x.Year].s+=x.avg_asp*(x.total_cases||1); ym[x.Year].c+=(x.total_cases||1);});
     labels=Object.keys(ym).sort();
     values=labels.map(y=>ym[y].c?Math.round(ym[y].s/ym[y].c):0);
   }
+  const fmtAsp = v => v>=100000?'₹'+(v/100000).toFixed(1)+'L':'₹'+(v/1000).toFixed(0)+'K';
   trendChart=new Chart(ctx,{
     type:'line',
-    data:{labels,datasets:[{label:'Avg ASP',data:values,borderColor:'#0099cc',backgroundColor:'rgba(0,153,204,0.08)',tension:0.4,pointBackgroundColor:'#0099cc',pointRadius:3,fill:true,borderWidth:2}]},
-    options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'₹'+c.parsed.y.toLocaleString('en-IN')}}},scales:{y:{ticks:{callback:v=>v>=100000?'₹'+(v/100000).toFixed(1)+'L':'₹'+(v/1000).toFixed(0)+'K'},grid:{color:'rgba(0,0,0,0.04)'}},x:{grid:{display:false},ticks:{maxTicksLimit:10,font:{size:10}}}}}
+    data:{labels,datasets:[{
+      label:'Avg ASP',data:values,
+      borderColor:'#0099cc',backgroundColor:'rgba(0,153,204,0.08)',
+      tension:0.4,pointBackgroundColor:'#0099cc',
+      pointRadius:5,pointHoverRadius:7,fill:true,borderWidth:2,
+      datalabels:{
+        display:true,
+        align:'top',anchor:'top',
+        formatter:v=>fmtAsp(v),
+        color:'#0099cc',
+        font:{size:10,weight:'700',family:'DM Mono,monospace'},
+        padding:{bottom:4}
+      }
+    }]},
+    options:{
+      responsive:true,
+      layout:{padding:{top:20}},
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:c=>'₹'+c.parsed.y.toLocaleString('en-IN')}},
+        datalabels:{display:true}
+      },
+      scales:{
+        y:{ticks:{callback:v=>fmtAsp(v)},grid:{color:'rgba(0,0,0,0.04)'}},
+        x:{grid:{display:false},ticks:{maxTicksLimit:12,font:{size:10}}}
+      }
+    },
+    plugins:[ChartDataLabels]
   });
 }
 
@@ -847,27 +884,22 @@ function renderHospChart(data){
     }]},
     options:{
       indexAxis:'y',responsive:true,
-      layout:{padding:{right:80}},
+      layout:{padding:{right:70}},
       plugins:{
         legend:{display:false},
         tooltip:{callbacks:{label:c=>'₹'+c.parsed.x.toLocaleString('en-IN')}},
+        datalabels:{
+          display:true,
+          anchor:'end',align:'right',
+          formatter:v=>v>=100000?'₹'+(v/100000).toFixed(1)+'L':'₹'+(v/1000).toFixed(0)+'K',
+          color:'#0099cc',
+          font:{size:11,weight:'700',family:'DM Mono,monospace'}
+        }
       },
       scales:{
         x:{display:false,grid:{display:false}},
         y:{grid:{display:false},ticks:{font:{size:11},color:'#374151'}}
-      },
-      animation:{onComplete: function(){
-        const ctx=this.ctx;
-        ctx.font='bold 11px DM Mono,monospace';
-        ctx.fillStyle='#0099cc';
-        ctx.textAlign='left';
-        this.data.datasets[0].data.forEach((val,i)=>{
-          const meta=this.getDatasetMeta(0);
-          const bar=meta.data[i];
-          const label=val>=100000?'₹'+(val/100000).toFixed(1)+'L':'₹'+(val/1000).toFixed(0)+'K';
-          ctx.fillText(label, bar.x+6, bar.y+4);
-        });
-      }}
+      }
     }
   });
 }
@@ -882,7 +914,7 @@ function renderCatChart(data){
   catChart=new Chart(ctx,{
     type:'doughnut',
     data:{labels:sorted.map(x=>x.cat),datasets:[{data:sorted.map(x=>x.asp),backgroundColor:colors,borderWidth:2,borderColor:'#fff',hoverOffset:6}]},
-    options:{responsive:true,plugins:{legend:{position:'right',labels:{font:{size:10},color:'#64748b',boxWidth:10,padding:8}},tooltip:{callbacks:{label:c=>c.label+': ₹'+c.parsed.toLocaleString('en-IN')}}}}
+    options:{responsive:true,plugins:{legend:{position:'right',labels:{font:{size:10},color:'#64748b',boxWidth:10,padding:8}},tooltip:{callbacks:{label:c=>c.label+': ₹'+c.parsed.toLocaleString('en-IN')}},datalabels:{display:false}}}
   });
 }
 
