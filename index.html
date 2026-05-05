@@ -702,7 +702,7 @@ function populateASPFilters(){
   document.getElementById('a-insurer').innerHTML='<option value="">All Insurers</option>';
   RAW.years.forEach(y=>document.getElementById('a-year').innerHTML+=`<option>${y}</option>`);
   RAW.cities.forEach(c=>document.getElementById('a-city').innerHTML+=`<option>${c}</option>`);
-  RAW.categories.filter(c=>!EXCL_CATS.includes((c||'').toUpperCase().trim())).forEach(c=>document.getElementById('a-category').innerHTML+=`<option>${c}</option>`);
+  RAW.categories.filter(c=>isValidCategory(c)).forEach(c=>document.getElementById('a-category').innerHTML+=`<option>${c}</option>`);
   MONTHS.slice(1).forEach((m,i)=>document.getElementById('a-month').innerHTML+=`<option value="${i+1}">${m}</option>`);
   RAW.insurers.slice(0,80).forEach(i=>document.getElementById('a-insurer').innerHTML+=`<option>${i}</option>`);
   window._aspHospitals=[...new Set(RAW.asp.map(a=>(Array.isArray(a)?a[3]:a.HospitalName).split(',')[0].trim()))].sort();
@@ -729,7 +729,7 @@ function fmtAsp(v){return v>=100000?'₹'+(v/100000).toFixed(1)+'L':'₹'+(v/100
 
 function renderASP(){
   const f=getASPF();
-  let data=getASPData().filter(d=>!EXCL_CATS.includes((d.Category||'').toUpperCase().trim()));
+  let data=getASPData().filter(d=>isValidCategory(d.Category));
   if(f.city) data=data.filter(d=>d.CityBucket===f.city);
   if(f.category) data=data.filter(d=>d.Category===f.category);
   if(f.insurer) data=data.filter(d=>d.InsuranceName===f.insurer);
@@ -924,9 +924,9 @@ function renderHospChart(data){
   const byH={};
   data.forEach(d=>{const k=d.HospitalName.split(',')[0];if(!byH[k]){byH[k]={s:0,c:0};} byH[k].s+=d.avg_asp*d.cases;byH[k].c+=d.cases;});
   // Only include hospitals with 3+ cases for reliability
-  const sorted=Object.entries(byH).filter(([k,v])=>v.c>=3).map(([k,v])=>{return{name:k,asp:Math.round(v.s/v.c),cnt:v.c}}).sort((a,b)=>b.asp-a.asp).slice(0,8);
+  const sorted=Object.entries(byH).filter(([k,v])=>v.c>=1).map(([k,v])=>{return{name:k,asp:Math.round(v.s/v.c),cnt:v.c}}).sort((a,b)=>b.asp-a.asp).slice(0,8);
   if(!sorted.length){
-    ctx.canvas.parentElement.innerHTML='<div class="chart-title">Top Hospitals by ASP</div><div class="no-data">No hospitals with 3+ cases for selected filters</div>';
+    ctx.canvas.parentElement.innerHTML='<div class="chart-title">Top Hospitals by ASP</div><div class="no-data">No data for selected filters</div>';
     return;
   }
   hospChart=new Chart(ctx,{
@@ -1157,6 +1157,15 @@ function showRefreshBadge(msg){
 }
 
 
+function isValidCategory(cat){
+  if(!cat||cat.trim()==='') return false;
+  const EXCL=['CARDIOLOGY','ENDOCRINOLOGY','INTERNAL MEDICINE','NEUROLOGY','NEUROSURGERY','INTERNAL MEDICNE','PULMONOLOGY','SURGICAL ONCOLOGY','GASTROENTOLOGY','GASTROINTESTINAL SURGERY','OPHTHALMOLOGY','GASTROENTEROLOGY','OPTHALMOLOGY','INTERNAL MEDICIN'];
+  if(EXCL.includes(cat.toUpperCase().trim())) return false;
+  if(/^\d+$/.test(cat.trim())) return false;
+  if(cat.trim().length<3) return false;
+  return true;
+}
+
 function parseCSV(text){
   const lines=text.trim().split('\n');
   const headers=parseCSVRow(lines[0]);
@@ -1232,7 +1241,7 @@ function processData(csv1,csv2){
     const yr=d.getFullYear(),mo=d.getMonth()+1,qt=`Q${Math.ceil(mo/3)}`;
     const city=(row['City Bucket']||'Others').trim();
     const cat=(row['Category']||'').trim();
-    if(EXCL_CATS.includes(cat.toUpperCase().trim())) return;
+    if(!isValidCategory(cat)) return;
     const mk=`${yr}|${mo}|${city}|${cat}`;
     if(!mcM[mk]) mcM[mk]={Year:yr,Month:mo,CityBucket:city,Category:cat,asp_sum:0,cases:0};
     mcM[mk].asp_sum+=app; mcM[mk].cases++;
