@@ -941,43 +941,52 @@ function loadAndInit(){
   RAW = EMBEDDED_DATA;
   showLoader(false);
   renderHospitalPage();
-  setTimeout(tryLiveRefresh, 1500);
+  // Only try live after page is fully rendered
+  setTimeout(tryLiveRefresh, 3000);
 }
 
 async function tryLiveRefresh(){
+  showRefreshBadge('🔄 Syncing with Google Sheets...');
+  
   const SHEET_H = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRrd9wkjq0MLRYCp5k2fBRnHdjOpeTgGuL6eLwIlQuAAdK0PsANa9zGiiF9Owh-BsC_sRPkdl1S0PC8/pub?gid=0&single=true&output=csv";
   const SHEET_A = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRrd9wkjq0MLRYCp5k2fBRnHdjOpeTgGuL6eLwIlQuAAdK0PsANa9zGiiF9Owh-BsC_sRPkdl1S0PC8/pub?gid=1167367380&single=true&output=csv";
-  
-  async function doFetch(url){
-    // Try direct first (works on GitHub Pages)
-    try {
-      const r = await fetch(url, {cache:'no-cache'});
-      if(r.ok) return await r.text();
-    } catch(e){}
-    // Fallback to corsproxy
-    const r = await fetch('https://corsproxy.io/?' + encodeURIComponent(url));
-    if(r.ok) return await r.text();
-    throw new Error('All fetches failed');
+
+  const VALID_CITIES = new Set(['Bangalore','DELHI','GURUGRAM','Mumbai','Hyderabad','Pune','Ahmedabad','FARIDABAD','NOIDA']);
+
+  async function tryFetch(url){
+    // Strategy 1: Direct (works on GitHub Pages)
+    try { const r=await fetch(url,{cache:'no-cache'}); if(r.ok){ const t=await r.text(); if(t.length>100) return t; } } catch(e){}
+    // Strategy 2: corsproxy.io
+    try { const r=await fetch('https://corsproxy.io/?'+encodeURIComponent(url)); if(r.ok){ const t=await r.text(); if(t.length>100) return t; } } catch(e){}
+    // Strategy 3: allorigins
+    try { const r=await fetch('https://api.allorigins.win/get?url='+encodeURIComponent(url)); if(r.ok){ const j=await r.json(); if(j.contents&&j.contents.length>100) return j.contents; } } catch(e){}
+    throw new Error('All strategies failed');
   }
 
   try {
-    const [csv1, csv2] = await Promise.all([doFetch(SHEET_H), doFetch(SHEET_A)]);
+    const [csv1, csv2] = await Promise.all([tryFetch(SHEET_H), tryFetch(SHEET_A)]);
     const newRAW = processData(csv1, csv2);
     
-    // Validate — if we got less than 50 hospitals something went wrong, keep embedded
-    if(newRAW.hospitals.length < 50){
-      showRefreshBadge('⚠️ Live data invalid, using cached data');
+    // Strict validation
+    if(newRAW.hospitals.length < 100){
+      showRefreshBadge('⚠️ Live data has only ' + newRAW.hospitals.length + ' hospitals — keeping cached');
+      return;
+    }
+    // Check no garbage cities
+    const badCities = newRAW.hospitals.filter(h => h.city && !VALID_CITIES.has(h.city));
+    if(badCities.length > 3){
+      showRefreshBadge('⚠️ Live sheet has ' + badCities.length + ' invalid rows — keeping cached. Check sheet: ' + badCities.slice(0,2).map(h=>h.city).join(', '));
       return;
     }
     
+    // All good — update
     RAW = newRAW;
-    // Re-render current page
-    const activePage = document.querySelector('.page.active');
-    if(activePage && activePage.id === 'page-hospital') renderHospitalPage();
-    else if(activePage && activePage.id === 'page-asp') renderASPPage();
-    showRefreshBadge('✓ Live data loaded — ' + RAW.hospitals.length + ' hospitals');
+    const pg = document.querySelector('.page.active');
+    if(pg && pg.id==='page-hospital') renderHospitalPage();
+    else if(pg && pg.id==='page-asp') renderASPPage();
+    showRefreshBadge('✅ Live — ' + newRAW.hospitals.length + ' hospitals synced');
   } catch(e){
-    showRefreshBadge('📦 Cached data — ' + EMBEDDED_DATA.hospitals.length + ' hospitals');
+    showRefreshBadge('📦 Cached data (' + EMBEDDED_DATA.hospitals.length + ' hospitals) — ' + e.message);
   }
 }
 
@@ -986,12 +995,12 @@ function showRefreshBadge(msg){
   if(!b){
     b = document.createElement('div');
     b.id = 'refreshBadge';
-    b.style.cssText = 'position:fixed;bottom:16px;right:16px;background:#1a2332;color:white;padding:10px 16px;border-radius:10px;font-size:12px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.2);transition:opacity 0.5s;font-family:Mulish,sans-serif;display:flex;align-items:center;gap:8px';
+    b.style.cssText = 'position:fixed;bottom:16px;right:16px;background:#1a2332;color:white;padding:10px 16px;border-radius:10px;font-size:12px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.2);font-family:Mulish,sans-serif;cursor:pointer';
+    b.onclick = () => b.style.display='none';
     document.body.appendChild(b);
   }
-  b.innerHTML = msg;
-  b.style.opacity = '1';
-  setTimeout(()=>{ b.style.opacity='0'; }, 5000);
+  b.style.display='block';
+  b.innerHTML = msg + ' <span style="opacity:0.5;margin-left:6px">✕</span>';
 }
 
 function showLoader(show){
@@ -1088,6 +1097,14 @@ function processData(csv1, csv2){
     if(['KOLKATA'].includes(c)) return 'East';
     return 'Central';
   }
+  function getRegionNorm(city){
+    const c=(city||'').toUpperCase().trim();
+    if(['DELHI','NOIDA','FARIDABAD','GURUGRAM','GURGAON'].includes(c)) return 'North';
+    if(['MUMBAI','PUNE','AHMEDABAD'].includes(c)) return 'West';
+    if(['BANGALORE','HYDERABAD','CHENNAI'].includes(c)) return 'South';
+    if(['KOLKATA'].includes(c)) return 'East';
+    return 'Central';
+  }
   function catStatus(s){
     const v=(s||'').trim().toLowerCase();
     if(v==='active') return 'Active';
@@ -1102,7 +1119,8 @@ function processData(csv1, csv2){
 
   // Process hospitals
   const VALID_CITIES_SET = new Set(['DELHI','NOIDA','FARIDABAD','GURUGRAM','GURGAON',
-    'MUMBAI','PUNE','AHMEDABAD','BANGALORE','HYDERABAD','CHENNAI','KOLKATA']);
+    'MUMBAI','PUNE','AHMEDABAD','BANGALORE','HYDERABAD','CHENNAI','KOLKATA',
+    'Bangalore','Mumbai','Hyderabad','Pune','Ahmedabad']);
 
   const hospitals = [];
   h1rows.forEach(row => {
@@ -1127,7 +1145,7 @@ function processData(csv1, csv2){
     }
     hospitals.push({
       name, city, area:(row['AREA']||'').trim(),
-      region: getRegion(city),
+      region: getRegion(rawCity),
       status: catStatus(row['Active status']||''),
       mop: (row['MOP Status']||'').trim(),
       ins_comments:(row['Insurance Comments']||'').trim(),
