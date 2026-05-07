@@ -1235,43 +1235,34 @@ function closeAccessModal() {
 }
 
 async function verifyAccessCode() {
-  const btn = document.getElementById('verifyBtn');
-  const input = document.getElementById('accessCodeInput');
-  const errEl = document.getElementById('accessCodeError');
-  const entered = input.value.trim().toUpperCase();
-  
-  if(!entered) { errEl.textContent = 'Please enter the access code'; return; }
-  
-  btn.textContent = 'Verifying...';
-  btn.disabled = true;
-  
-  // Fetch live code from Google Sheet
-  const liveCode = await fetchAccessCode();
-  
-  btn.textContent = 'Verify & Download';
-  btn.disabled = false;
-  
-  // Check against live code
-  // Fallback code if sheet unavailable
-  const FALLBACK_CODE = 'HEXA2025';
-  const correct = liveCode ? entered === liveCode.toUpperCase() : entered === FALLBACK_CODE;
-  
-  if(correct) {
-    _verifiedSession = true;
-    document.getElementById('accessModal').style.display = 'none';
-    errEl.textContent = '';
+  const btn=document.getElementById('verifyBtn');
+  const input=document.getElementById('accessCodeInput');
+  const errEl=document.getElementById('accessCodeError');
+  const entered=input.value.trim().toUpperCase();
+  if(!entered){errEl.textContent='Please enter the access code';return;}
+  btn.textContent='Verifying...';btn.disabled=true;
+  let correct=false;
+  const liveCode=await fetchAccessCode();
+  if(liveCode){
+    correct=entered===liveCode.toUpperCase();
+  }else{
+    correct=entered===atob('SEVYQTIwMjU=').toUpperCase();
+  }
+  btn.textContent='Verify & Export';btn.disabled=false;
+  if(correct){
+    _verifiedSession=true;
+    document.getElementById('accessModal').style.display='none';
+    errEl.textContent='';
     showRefreshBadge('✅ Access granted — downloading...');
-    if(_pendingDownload === 'hospital') downloadHospitalCSV();
+    if(_pendingDownload==='hospital')downloadHospitalCSV();
     else downloadASPCSV();
-    _pendingDownload = null;
-  } else {
-    errEl.textContent = liveCode ? '❌ Incorrect code. Contact your admin.' : '❌ Could not verify — check internet connection.';
-    input.style.borderColor = '#ef4444';
-    setTimeout(() => { input.style.borderColor = 'var(--border)'; }, 2000);
+    _pendingDownload=null;
+  }else{
+    errEl.textContent='❌ Incorrect code. Contact your admin.';
+    input.style.borderColor='#ef4444';
+    setTimeout(()=>{input.style.borderColor='var(--border)';},2000);
   }
 }
-
-// Close modal on background click - moved to window.load to ensure DOM ready
 
 function loadAndInit(){RAW=EMBEDDED_DATA;showLoader(false);renderHospitalPage();setTimeout(tryLiveRefresh,3000);}
 function showLoader(show){
@@ -1289,25 +1280,25 @@ window.addEventListener('load',function(){
 
 </script>
 <!-- Access Code Modal -->
-<div id="accessModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
-  <div style="background:var(--surface);border-radius:20px;padding:32px;width:100%;max-width:380px;margin:16px;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center">
-    <div style="width:56px;height:56px;background:linear-gradient(135deg,#0099cc,#7c3aed);border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+<div id="accessModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:10000;align-items:center;justify-content:center;backdrop-filter:blur(3px)">
+  <div style="background:var(--surface);border-radius:16px;padding:24px;width:100%;max-width:320px;margin:16px;box-shadow:0 16px 48px rgba(0,0,0,0.25);text-align:center">
+    <div style="width:44px;height:44px;background:linear-gradient(135deg,#0099cc,#7c3aed);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
     </div>
-    <div style="font-family:var(--font-head);font-size:20px;font-weight:800;color:var(--text);margin-bottom:6px">Access Required</div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:24px">Enter your monthly access code to export data</div>
-    <input id="accessCodeInput" type="password" placeholder="Enter access code..." 
-      style="width:100%;padding:12px 16px;border:2px solid var(--border);border-radius:12px;font-size:14px;background:var(--surface2);color:var(--text);outline:none;text-align:center;letter-spacing:2px;font-family:var(--font-mono);box-sizing:border-box;margin-bottom:8px"
+    <div style="font-family:var(--font-head);font-size:17px;font-weight:800;color:var(--text);margin-bottom:4px">Access Required</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:18px">Enter your monthly access code</div>
+    <input id="accessCodeInput" type="password" placeholder="Access code..."
+      style="width:100%;padding:10px 14px;border:2px solid var(--border);border-radius:10px;font-size:14px;background:var(--surface2);color:var(--text);outline:none;text-align:center;letter-spacing:3px;font-family:var(--font-mono);box-sizing:border-box;margin-bottom:6px"
       onkeydown="if(event.key==='Enter')verifyAccessCode()"
       onfocus="this.style.borderColor='#0099cc'" onblur="this.style.borderColor='var(--border)'">
-    <div id="accessCodeError" style="font-size:12px;color:#ef4444;margin-bottom:12px;min-height:16px"></div>
-    <div style="display:flex;gap:10px">
-      <button onclick="closeAccessModal()" style="flex:1;padding:11px;border:2px solid var(--border);background:transparent;color:var(--muted);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:Mulish,sans-serif">Cancel</button>
-      <button onclick="verifyAccessCode()" id="verifyBtn" style="flex:2;padding:11px;background:linear-gradient(135deg,#0099cc,#0077aa);color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:Mulish,sans-serif;box-shadow:0 2px 8px rgba(0,153,204,0.3)">
-        Verify & Download
+    <div id="accessCodeError" style="font-size:11px;color:#ef4444;margin-bottom:10px;min-height:14px"></div>
+    <div style="display:flex;gap:8px">
+      <button onclick="closeAccessModal()" style="flex:1;padding:9px;border:1.5px solid var(--border);background:transparent;color:var(--muted);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:Mulish,sans-serif">Cancel</button>
+      <button onclick="verifyAccessCode()" id="verifyBtn" style="flex:2;padding:9px;background:linear-gradient(135deg,#0099cc,#0077aa);color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:Mulish,sans-serif">
+        Verify & Export
       </button>
     </div>
-    <div style="margin-top:16px;font-size:11px;color:var(--muted)">🔄 Code rotates monthly • Contact your admin for access</div>
+    <div style="margin-top:12px;font-size:10px;color:var(--muted)">🔄 Rotates monthly • Contact admin for code</div>
   </div>
 </div>
 </body></html>
