@@ -415,7 +415,13 @@ tr:hover td:first-child{background:#f0f7fb}
   </div>
   <div class="table-wrap">
     <div class="table-header">
-      <div class="table-title">Hospital List <span id="h-count" style="color:var(--muted);font-weight:400;font-size:12px;margin-left:4px"></span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;width:100%;flex-wrap:wrap;gap:8px">
+        <div class="table-title">Hospital List <span id="h-count" style="color:var(--muted);font-weight:400;font-size:12px;margin-left:4px"></span></div>
+        <button onclick="promptDownload('hospital')" style="display:flex;align-items:center;gap:6px;background:linear-gradient(135deg,#16a34a,#15803d);color:white;border:none;padding:8px 16px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:Mulish,sans-serif;box-shadow:0 2px 8px rgba(22,163,74,0.3);transition:all 0.2s" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 12px rgba(22,163,74,0.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px rgba(22,163,74,0.3)'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export CSV
+        </button>
+      </div>
       <div style="font-size:11px;color:var(--muted)">Click any row to view full details →</div>
     </div>
     <div class="table-scroll">
@@ -493,9 +499,15 @@ tr:hover td:first-child{background:#f0f7fb}
   <div class="table-wrap">
     <div class="table-header">
       <div style="flex:1">
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-          <div class="table-title">Hospital Rankings <span id="asp-count" style="color:var(--muted);font-weight:400;font-size:12px;margin-left:4px"></span></div>
-          <input type="text" id="asp-hosp-search" placeholder="🔍 Search in table..." oninput="filterASPTable(this.value)" style="padding:5px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--surface2);color:var(--text);outline:none;width:200px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <div class="table-title">Hospital Rankings <span id="asp-count" style="color:var(--muted);font-weight:400;font-size:12px;margin-left:4px"></span></div>
+            <input type="text" id="asp-hosp-search" placeholder="🔍 Search in table..." oninput="filterASPTable(this.value)" style="padding:5px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--surface2);color:var(--text);outline:none;width:180px">
+          </div>
+          <button onclick="promptDownload('asp')" style="display:flex;align-items:center;gap:6px;background:linear-gradient(135deg,#0099cc,#0077aa);color:white;border:none;padding:8px 16px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:Mulish,sans-serif;box-shadow:0 2px 8px rgba(0,153,204,0.3);transition:all 0.2s" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 12px rgba(0,153,204,0.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px rgba(0,153,204,0.3)'">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export CSV
+          </button>
         </div>
         <div style="font-size:11px;color:var(--muted);margin-top:4px">Click any 🔵 hospital name for historical data</div>
       </div>
@@ -1071,6 +1083,187 @@ function showRefreshBadge(msg){
   if(!b){b=document.createElement('div');b.id='refreshBadge';b.style.cssText='position:fixed;bottom:16px;right:16px;background:#1a2332;color:white;padding:10px 16px;border-radius:10px;font-size:12px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.2);font-family:Mulish,sans-serif;cursor:pointer';b.onclick=()=>b.style.display='none';document.body.appendChild(b);}
   b.style.display='block';b.innerHTML=msg+' <span style="opacity:0.5;margin-left:6px">✕</span>';
 }
+
+// ── CSV DOWNLOAD ──
+function escapeCSV(val) {
+  if(val === null || val === undefined) return '';
+  const s = String(val);
+  if(s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+function downloadCSV(rows, filename) {
+  const csv = rows.map(row => row.map(escapeCSV).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], {type: 'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadHospitalCSV() {
+  const filtered = getHFiltered();
+  const headers = ['Hospital Name','Area','City','Region','Status','MOP','Coverage %',
+    'Insurance Comments','City Comments','Doctors Comments','Remarks',
+    ...RAW.tpa_cols.map(t => 'TPA: '+t),
+    ...RAW.ins_cols.map(i => 'Ins: '+i)
+  ];
+  const rows = filtered.map(h => [
+    h.name, h.area||'', h.city, h.region, h.status, h.mop||'', h.coverage_pct+'%',
+    h.ins_comments||'', h.city_comments||'', h.doc_comments||'', h.remarks||'',
+    ...RAW.tpa_cols.map(t => (h.tpa||{})[t]||''),
+    ...RAW.ins_cols.map(i => (h.ins||{})[i]||'')
+  ]);
+  const f = {
+    city: document.getElementById('h-city').value,
+    status: document.getElementById('h-status').value,
+    region: document.getElementById('h-region').value
+  };
+  const parts = ['HexaHealth_Hospitals'];
+  if(f.city) parts.push(f.city);
+  if(f.status) parts.push(f.status);
+  if(f.region) parts.push(f.region);
+  parts.push(new Date().toISOString().slice(0,10));
+  downloadCSV([headers, ...rows], parts.join('_') + '.csv');
+  showRefreshBadge('✅ Downloaded ' + filtered.length + ' hospitals');
+}
+
+function downloadASPCSV() {
+  // Get currently visible rows from the table
+  const tbody = document.getElementById('aspTbody');
+  const visibleRows = [...tbody.querySelectorAll('tr')].filter(r => r.style.display !== 'none');
+
+  const f = getASPF();
+  let data = getASPData(f).filter(d => isValidCategory(d.Category));
+  if(f.city) data = data.filter(d => d.CityBucket === f.city);
+  if(f.category) data = data.filter(d => d.Category === f.category);
+  if(f.insurer) data = data.filter(d => d.InsuranceName === f.insurer);
+  if(f.tpa) data = data.filter(d => d.TPAName === f.tpa);
+  if(f.hospital) data = data.filter(d => d.HospitalName.split(',')[0].trim() === f.hospital);
+  data.sort((a,b) => b.avg_asp - a.avg_asp);
+
+  // If search filter active, further filter
+  const searchQ = (document.getElementById('asp-hosp-search')||{}).value||'';
+  if(searchQ) data = data.filter(d =>
+    d.HospitalName.toLowerCase().includes(searchQ.toLowerCase()) ||
+    d.Category.toLowerCase().includes(searchQ.toLowerCase()) ||
+    d.InsuranceName.toLowerCase().includes(searchQ.toLowerCase())
+  );
+
+  const headers = ['Rank','Hospital','City','Category','Insurer','TPA','Avg ASP (₹)','Cases','H.Status'];
+  const rows = data.map((d,i) => [
+    i+1,
+    d.HospitalName.split(',')[0],
+    d.CityBucket,
+    d.Category,
+    d.InsuranceName,
+    d.TPAName||'',
+    d.avg_asp,
+    d.cases,
+    getHospStatus(d.HospitalName)
+  ]);
+
+  const parts = ['HexaHealth_ASP'];
+  if(f.year) parts.push(f.year);
+  if(f.city) parts.push(f.city);
+  if(f.category) parts.push(f.category);
+  if(f.insurer) parts.push(f.insurer.split(' ')[0]);
+  parts.push(new Date().toISOString().slice(0,10));
+  downloadCSV([headers, ...rows], parts.join('_') + '.csv');
+  showRefreshBadge('✅ Downloaded ' + data.length + ' rows');
+}
+
+
+// ── ACCESS CODE SYSTEM ──
+let _pendingDownload = null;
+let _verifiedSession = false; // stays verified for the session
+
+// Fetch live access code from Google Sheet "Config" tab
+// You need to add a tab called "Config" in your Google Sheet
+// with cell A1 = "code" and cell B1 = your access code (e.g. HEXA-MAY25)
+const ACCESS_CODE_SHEET = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRrd9wkjq0MLRYCp5k2fBRnHdjOpeTgGuL6eLwIlQuAAdK0PsANa9zGiiF9Owh-BsC_sRPkdl1S0PC8/pub?gid=CONFIG_GID&single=true&output=csv";
+let _liveCode = null;
+
+async function fetchAccessCode() {
+  try {
+    const r = await fetch(ACCESS_CODE_SHEET, {cache:'no-cache'});
+    if(r.ok) {
+      const text = await r.text();
+      const rows = text.trim().split('\n');
+      // Expect format: code,HEXA-MAY25
+      for(const row of rows) {
+        const parts = row.split(',');
+        if(parts[0].trim().toLowerCase() === 'code') {
+          _liveCode = parts[1].trim().replace(/"/g,'');
+          return _liveCode;
+        }
+      }
+    }
+  } catch(e) {}
+  return null;
+}
+
+function promptDownload(type) {
+  // If already verified this session, download directly
+  if(_verifiedSession) {
+    if(type === 'hospital') downloadHospitalCSV();
+    else downloadASPCSV();
+    return;
+  }
+  _pendingDownload = type;
+  document.getElementById('accessCodeInput').value = '';
+  document.getElementById('accessCodeError').textContent = '';
+  document.getElementById('accessModal').style.display = 'flex';
+  setTimeout(() => document.getElementById('accessCodeInput').focus(), 100);
+}
+
+function closeAccessModal() {
+  document.getElementById('accessModal').style.display = 'none';
+  _pendingDownload = null;
+}
+
+async function verifyAccessCode() {
+  const btn = document.getElementById('verifyBtn');
+  const input = document.getElementById('accessCodeInput');
+  const errEl = document.getElementById('accessCodeError');
+  const entered = input.value.trim().toUpperCase();
+  
+  if(!entered) { errEl.textContent = 'Please enter the access code'; return; }
+  
+  btn.textContent = 'Verifying...';
+  btn.disabled = true;
+  
+  // Fetch live code from Google Sheet
+  const liveCode = await fetchAccessCode();
+  
+  btn.textContent = 'Verify & Download';
+  btn.disabled = false;
+  
+  // Check against live code
+  // Fallback code if sheet unavailable
+  const FALLBACK_CODE = 'HEXA2025';
+  const correct = liveCode ? entered === liveCode.toUpperCase() : entered === FALLBACK_CODE;
+  
+  if(correct) {
+    _verifiedSession = true;
+    document.getElementById('accessModal').style.display = 'none';
+    errEl.textContent = '';
+    showRefreshBadge('✅ Access granted — downloading...');
+    if(_pendingDownload === 'hospital') downloadHospitalCSV();
+    else downloadASPCSV();
+    _pendingDownload = null;
+  } else {
+    errEl.textContent = liveCode ? '❌ Incorrect code. Contact your admin.' : '❌ Could not verify — check internet connection.';
+    input.style.borderColor = '#ef4444';
+    setTimeout(() => { input.style.borderColor = 'var(--border)'; }, 2000);
+  }
+}
+
+// Close modal on background click
+document.getElementById('accessModal').addEventListener('click', function(e) {
+  if(e.target === this) closeAccessModal();
+});
+
 function loadAndInit(){RAW=EMBEDDED_DATA;showLoader(false);renderHospitalPage();setTimeout(tryLiveRefresh,3000);}
 function showLoader(show){
   let el=document.getElementById('loader');
@@ -1082,4 +1275,27 @@ window.addEventListener('load',function(){
   loadAndInit();
 });
 
-</script></body></html>
+</script>
+<!-- Access Code Modal -->
+<div id="accessModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
+  <div style="background:var(--surface);border-radius:20px;padding:32px;width:100%;max-width:380px;margin:16px;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center">
+    <div style="width:56px;height:56px;background:linear-gradient(135deg,#0099cc,#7c3aed);border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    </div>
+    <div style="font-family:var(--font-head);font-size:20px;font-weight:800;color:var(--text);margin-bottom:6px">Access Required</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:24px">Enter your monthly access code to export data</div>
+    <input id="accessCodeInput" type="password" placeholder="Enter access code..." 
+      style="width:100%;padding:12px 16px;border:2px solid var(--border);border-radius:12px;font-size:14px;background:var(--surface2);color:var(--text);outline:none;text-align:center;letter-spacing:2px;font-family:var(--font-mono);box-sizing:border-box;margin-bottom:8px"
+      onkeydown="if(event.key==='Enter')verifyAccessCode()"
+      onfocus="this.style.borderColor='#0099cc'" onblur="this.style.borderColor='var(--border)'">
+    <div id="accessCodeError" style="font-size:12px;color:#ef4444;margin-bottom:12px;min-height:16px"></div>
+    <div style="display:flex;gap:10px">
+      <button onclick="closeAccessModal()" style="flex:1;padding:11px;border:2px solid var(--border);background:transparent;color:var(--muted);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:Mulish,sans-serif">Cancel</button>
+      <button onclick="verifyAccessCode()" id="verifyBtn" style="flex:2;padding:11px;background:linear-gradient(135deg,#0099cc,#0077aa);color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:Mulish,sans-serif;box-shadow:0 2px 8px rgba(0,153,204,0.3)">
+        Verify & Download
+      </button>
+    </div>
+    <div style="margin-top:16px;font-size:11px;color:var(--muted)">🔄 Code rotates monthly • Contact your admin for access</div>
+  </div>
+</div>
+</body></html>
