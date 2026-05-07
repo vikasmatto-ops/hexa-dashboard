@@ -1191,18 +1191,24 @@ const ACCESS_CODE_SHEET = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRrd9
 let _liveCode = null;
 
 async function fetchAccessCode() {
+  async function tryFetch(url) {
+    // Try direct first (works on GitHub Pages)
+    try { const r=await fetch(url,{cache:'no-cache'}); if(r.ok){const t=await r.text();if(t.length>3)return t;} } catch(e){}
+    // Try corsproxy
+    try { const r=await fetch('https://corsproxy.io/?'+encodeURIComponent(url)); if(r.ok){const t=await r.text();if(t.length>3)return t;} } catch(e){}
+    // Try allorigins
+    try { const r=await fetch('https://api.allorigins.win/get?url='+encodeURIComponent(url)); if(r.ok){const j=await r.json();if(j.contents)return j.contents;} } catch(e){}
+    return null;
+  }
   try {
-    const r = await fetch(ACCESS_CODE_SHEET, {cache:'no-cache'});
-    if(r.ok) {
-      const text = await r.text();
-      const rows = text.trim().split('\n');
-      // Expect format: code,HEXA-MAY25
-      for(const row of rows) {
-        const parts = row.split(',');
-        if(parts[0].trim().toLowerCase() === 'code') {
-          _liveCode = parts[1].trim().replace(/"/g,'');
-          return _liveCode;
-        }
+    const text = await tryFetch(ACCESS_CODE_SHEET);
+    if(!text) return null;
+    const rows = text.trim().split('\n');
+    for(const row of rows) {
+      const parts = row.split(',');
+      if(parts[0].trim().toLowerCase() === 'code') {
+        _liveCode = parts[1].trim().replace(/"/g,'');
+        return _liveCode;
       }
     }
   } catch(e) {}
