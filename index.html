@@ -387,7 +387,13 @@ tr:hover td:first-child{background:#f0f7fb}
       ASP Analytics
     </button>
   </nav>
-  <div class="sidebar-footer"><div class="live-dot"></div>Live • Google Sheets</div>
+  <div class="sidebar-footer">
+  <div style="display:flex;align-items:center;gap:6px;flex:1"><div class="live-dot"></div>Live • Google Sheets</div>
+  <button onclick="tryLiveRefresh()" title="Sync latest data from Google Sheets" style="background:rgba(0,153,204,0.12);border:1px solid rgba(0,153,204,0.3);color:#0099cc;padding:5px 12px;border-radius:8px;font-size:11px;cursor:pointer;font-family:Mulish,sans-serif;font-weight:700;display:flex;align-items:center;gap:4px">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+    Sync
+  </button>
+</div>
 </aside>
 
 <!-- MODAL -->
@@ -1259,10 +1265,7 @@ async function verifyAccessCode() {
   }
 }
 
-// Close modal on background click
-document.getElementById('accessModal').addEventListener('click', function(e) {
-  if(e.target === this) closeAccessModal();
-});
+// Close modal on background click - moved to window.load to ensure DOM ready
 
 function loadAndInit(){RAW=EMBEDDED_DATA;showLoader(false);renderHospitalPage();setTimeout(tryLiveRefresh,3000);}
 function showLoader(show){
@@ -1272,6 +1275,9 @@ function showLoader(show){
 }
 window.addEventListener('load',function(){
   if(typeof ChartDataLabels!=='undefined') Chart.register(ChartDataLabels);
+  // Close access modal on background click
+  const am = document.getElementById('accessModal');
+  if(am) am.addEventListener('click', function(e){ if(e.target===this) closeAccessModal(); });
   loadAndInit();
 });
 
