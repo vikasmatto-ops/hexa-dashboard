@@ -1025,6 +1025,7 @@ function processData(csv1,csv2){
   const h1rows=parseCSV(csv1),h2rows=parseCSV(csv2);
 
 
+
   const TPA_COLS=['EWA- VOLO','ERICSSON','FHPL','Genins','ghpl','Health India TPA','Health Ins (HITPA)','Heritage Health','md india','Med Save','Medi Assist','Paramount','Park Mediclaim','Raksha','Safeway','Medvantage TPA','Vidal TPA','Vipul'];
   const INS_COLS=['Aditya Birla','Bajaj Allianz','Care','Cholamandalam','Future generali','GO DIGIT','HDFC ERGO','ICICI Lombard','Iffco Tokio','Kotak General','LIBERTY','MAGMA HDI','Max Bupa','NAVI','Reliance General','Star Health','Zuno Insurance','SBI','TATA AIG','Universal sompo'];
   const CITY_NORM={BANGALORE:'Bangalore',BENGALURU:'Bangalore',DELHI:'Delhi','NEW DELHI':'Delhi',GURUGRAM:'Gurugram',GURGAON:'Gurugram',MUMBAI:'Mumbai',HYDERABAD:'Hyderabad',PUNE:'Pune',AHMEDABAD:'Ahmedabad',FARIDABAD:'Faridabad',NOIDA:'Noida',KOLKATA:'Kolkata',CHENNAI:'Chennai'};
@@ -1098,11 +1099,37 @@ async function tryLiveRefresh(){
     if(!csv1||!csv2){showRefreshBadge('📦 Cached '+EMBEDDED_DATA.hospitals.length+' hospitals');return;}
     const live=processData(csv1,csv2);
     if(live.hospitals.length<100){showRefreshBadge('⚠️ Live returned '+live.hospitals.length+' hospitals');return;}
-    RAW=live;
-    const pg=document.querySelector('.page.active');
-    if(pg&&pg.id==='page-hospital')renderHospitalPage();
-    else if(pg&&pg.id==='page-asp')renderASPPage();
-    showRefreshBadge('✅ Live ASP data — '+live.stats.total_cases.toLocaleString()+' cases • '+live.hospitals.length+' hospitals');
+    // Smart merge: live status/comments + best coverage from embedded or live
+    const mergedHospitals = live.hospitals.map(liveH => {
+      const embH = EMBEDDED_DATA.hospitals.find(e =>
+        e.name.toLowerCase() === liveH.name.toLowerCase()
+      );
+      if(embH) {
+        const liveTpaCount = Object.values(liveH.tpa||{}).filter(v=>v==='Yes').length;
+        const embTpaCount = Object.values(embH.tpa||{}).filter(v=>v==='Yes').length;
+        return {
+          ...liveH,
+          tpa: embTpaCount >= liveTpaCount ? embH.tpa : liveH.tpa,
+          ins: Object.values(embH.ins||{}).filter(v=>v==='Yes').length >= Object.values(liveH.ins||{}).filter(v=>v==='Yes').length ? embH.ins : liveH.ins,
+          coverage_pct: Math.max(liveH.coverage_pct||0, embH.coverage_pct||0),
+          ins_comments: liveH.ins_comments || embH.ins_comments || '',
+          city_comments: liveH.city_comments || embH.city_comments || '',
+          doc_comments: liveH.doc_comments || embH.doc_comments || '',
+          remarks: liveH.remarks || embH.remarks || '',
+        };
+      }
+      return liveH;
+    });
+    RAW = {...live, hospitals: mergedHospitals,
+      stats: {...live.stats,
+        active: mergedHospitals.filter(h=>h.status==='Active').length,
+        inactive: mergedHospitals.filter(h=>h.status==='Inactive').length
+      }
+    };
+    const pg = document.querySelector('.page.active');
+    if(pg&&pg.id==='page-hospital') renderHospitalPage();
+    else if(pg&&pg.id==='page-asp') renderASPPage();
+    showRefreshBadge('✅ Live — '+mergedHospitals.length+' hospitals • '+live.stats.total_cases.toLocaleString()+' cases');
   }catch(e){showRefreshBadge('📦 Cached data');}
 }
 function showRefreshBadge(msg){
