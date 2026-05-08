@@ -423,8 +423,8 @@ tr:hover td:first-child{background:#f0f7fb}
     <div class="table-header">
       <div style="display:flex;align-items:center;justify-content:space-between;width:100%;flex-wrap:wrap;gap:8px">
         <div class="table-title">Hospital List <span id="h-count" style="color:var(--muted);font-weight:400;font-size:12px;margin-left:4px"></span></div>
-        <button onclick="promptDownload('hospital')" style="display:flex;align-items:center;gap:6px;background:linear-gradient(135deg,#16a34a,#15803d);color:white;border:none;padding:8px 16px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:Mulish,sans-serif;box-shadow:0 2px 8px rgba(22,163,74,0.3);transition:all 0.2s" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 12px rgba(22,163,74,0.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px rgba(22,163,74,0.3)'">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <button onclick="promptDownload('hospital')" style="display:flex;align-items:center;gap:4px;background:#16a34a;color:white;border:none;padding:5px 10px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;font-family:Mulish,sans-serif;opacity:0.9" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.9'">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Export CSV
         </button>
       </div>
@@ -510,8 +510,8 @@ tr:hover td:first-child{background:#f0f7fb}
             <div class="table-title">Hospital Rankings <span id="asp-count" style="color:var(--muted);font-weight:400;font-size:12px;margin-left:4px"></span></div>
             <input type="text" id="asp-hosp-search" placeholder="🔍 Search in table..." oninput="filterASPTable(this.value)" style="padding:5px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--surface2);color:var(--text);outline:none;width:180px">
           </div>
-          <button onclick="promptDownload('asp')" style="display:flex;align-items:center;gap:6px;background:linear-gradient(135deg,#0099cc,#0077aa);color:white;border:none;padding:8px 16px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:Mulish,sans-serif;box-shadow:0 2px 8px rgba(0,153,204,0.3);transition:all 0.2s" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 12px rgba(0,153,204,0.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px rgba(0,153,204,0.3)'">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <button onclick="promptDownload('asp')" style="display:flex;align-items:center;gap:4px;background:#0099cc;color:white;border:none;padding:5px 10px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;font-family:Mulish,sans-serif;opacity:0.9" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.9'">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Export CSV
           </button>
         </div>
@@ -1039,7 +1039,7 @@ function processData(csv1,csv2){
     INS_COLS.forEach(c=>{const v=empV(row[c]);if(v)ins[c]=v;});
     const yes=Object.values({...tpa,...ins}).filter(v=>v==='Yes').length;
     const totalCols=TPA_COLS.length+INS_COLS.length; // always 38
-    hospitals.push({name,city,area:(row['AREA']||'').trim(),region:getRegion(rawCity),status:catSt(row['Active status']||''),mop:(row['MOP Status']||'').trim(),ins_comments:(row['Insurance Comments']||'').trim(),city_comments:(row['City Comments ']||row['City Comments']||'').trim(),doc_comments:(row['Doctors team comments ']||row['Doctors team comments']||'').trim(),remarks:(row['Remarks']||'').trim(),coverage_pct:Math.round(yes/totalCols*100),tpa,ins});
+    hospitals.push({name,city,area:(row['AREA']||'').trim(),region:getRegion(rawCity),status:catSt(row['Active status']||''),mop:(row['MOP Status']||'').trim(),ins_comments:(row['Insurance Comments']||'').trim(),city_comments:(row['City Comments ']||row['City Comments']||row['city comments']||row['CITY COMMENTS']||'').trim(),doc_comments:(row['Doctors team comments ']||row['Doctors team comments']||row['Doctors Team Comments']||row['Doctor Comments']||'').trim(),remarks:(row['Remarks']||'').trim(),coverage_pct:Math.round(yes/totalCols*100),tpa,ins});
   });
   function cleanAmt(v){if(!v)return null;const s=String(v).replace(/[₹,\s]/g,'').trim();if(!s||s.startsWith('#'))return null;const n=parseFloat(s);return isNaN(n)||n<=0?null:n;}
   function parseDate(v){if(!v)return null;const s=String(v).trim();const m1=s.match(/^([A-Za-z]+)\s+(\d+),\s*(\d{4})$/);if(m1){const d=new Date(`${m1[1]} ${m1[2]}, ${m1[3]}`);if(!isNaN(d))return d;}const m2=s.match(/^(\d+)\s+([A-Za-z]+),\s*(\d{4})$/);if(m2){const d=new Date(`${m2[2]} ${m2[1]}, ${m2[3]}`);if(!isNaN(d))return d;}return null;}
