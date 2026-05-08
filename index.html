@@ -1023,17 +1023,7 @@ function parseCSVRow(line){const result=[];let cur='';let inQ=false;for(let i=0;
 function parseCSV(text){const lines=text.trim().split('\n');const headers=parseCSVRow(lines[0]);return lines.slice(1).map(line=>{const vals=parseCSVRow(line);const obj={};headers.forEach((h,i)=>obj[h.trim()]=(vals[i]||'').trim());return obj;}).filter(r=>Object.values(r).some(v=>v));}
 function processData(csv1,csv2){
   const h1rows=parseCSV(csv1),h2rows=parseCSV(csv2);
-  // Log ALL column names from live sheet
-  if(h1rows.length>0){
-    const allKeys=Object.keys(h1rows[0]);
-    console.log('=== LIVE SHEET COLUMNS ===');
-    allKeys.forEach((k,i)=>console.log(i+': ['+k+'] len='+k.length));
-    const artemis=h1rows.find(r=>(r['Hospital Name']||'').toLowerCase().includes('artemis nfc'));
-    if(artemis){
-      console.log('=== ARTEMIS NFC ===');
-      allKeys.forEach(k=>{if(artemis[k]&&artemis[k]!=='') console.log('['+k+']='+artemis[k]);});
-    }
-  }
+
 
   const TPA_COLS=['EWA- VOLO','ERICSSON','FHPL','Genins','ghpl','Health India TPA','Health Ins (HITPA)','Heritage Health','md india','Med Save','Medi Assist','Paramount','Park Mediclaim','Raksha','Safeway','Medvantage TPA','Vidal TPA','Vipul'];
   const INS_COLS=['Aditya Birla','Bajaj Allianz','Care','Cholamandalam','Future generali','GO DIGIT','HDFC ERGO','ICICI Lombard','Iffco Tokio','Kotak General','LIBERTY','MAGMA HDI','Max Bupa','NAVI','Reliance General','Star Health','Zuno Insurance','SBI','TATA AIG','Universal sompo'];
@@ -1041,7 +1031,7 @@ function processData(csv1,csv2){
   function normCity(r){return r?CITY_NORM[r.trim().toUpperCase()]||null:null;}
   function getRegion(c){const u=(c||'').toUpperCase().trim();if(['DELHI','NOIDA','FARIDABAD','GURUGRAM','GURGAON'].includes(u))return'North';if(['MUMBAI','PUNE','AHMEDABAD'].includes(u))return'West';if(['BANGALORE','BENGALURU','HYDERABAD','CHENNAI'].includes(u))return'South';if(['KOLKATA'].includes(u))return'East';return'Central';}
   function catSt(s){const v=(s||'').trim().toLowerCase().replace(/\s+/g,'');return v==='active'?'Active':v==='inactive'?'Inactive':v==='hold'?'Hold':v.includes('active')&&!v.includes('in')?'Active':v.includes('inactive')?'Inactive':'Unknown';}
-  function empV(v){const u=(v||'').toString().trim().toUpperCase();return u==='YES'||u==='Y'?'Yes':u==='NO'||u==='N'?'No':''}
+  function empV(v){if(v===null||v===undefined)return '';const u=v.toString().trim().toUpperCase();if(['YES','Y','TRUE','1','EMPANELLED','EMPANELED'].includes(u))return 'Yes';if(['NO','N','FALSE','0','NOT EMPANELLED'].includes(u))return 'No';return '';}
   const hospitals=[];
   h1rows.forEach(row=>{
     const name=(row['Hospital Name']||'').trim();if(!name||name.length>150)return;
@@ -1068,7 +1058,7 @@ function processData(csv1,csv2){
     });
     const yes=Object.values({...tpa,...ins}).filter(v=>v==='Yes').length;
     const totalCols=TPA_COLS.length+INS_COLS.length; // always 38
-    hospitals.push({name,city,area:(row['AREA']||'').trim(),region:getRegion(rawCity),status:catSt(row['Active status']||''),mop:(row['MOP Status']||'').trim(),ins_comments:(row['Insurance Comments']||row['Insurance comments']||row['insurance_comments']||'').trim(),city_comments:(row['City Comments ']||row['City Comments']||'').trim(),doc_comments:(row['Doctors team comments ']||row['Doctors team comments']||'').trim(),remarks:(row['Remarks']||'').trim(),coverage_pct:Math.round(yes/totalCols*100),tpa,ins});
+    hospitals.push({name,city,area:(row['AREA']||'').trim(),region:getRegion(rawCity),status:catSt(row['Active status']||''),mop:(row['MOP Status']||'').trim(),ins_comments:(row['Insurance Comments']||row['Insurance comments']||row['insurance_comments']||'').trim(),city_comments:(row['City Comments']||row['City Comments ']||'').trim(),doc_comments:(row['Doctors team comments']||row['Doctors team comments ']||'').trim(),remarks:(row['Remarks']||'').trim(),coverage_pct:Math.round(yes/totalCols*100),tpa,ins});
   });
   function cleanAmt(v){if(!v)return null;const s=String(v).replace(/[₹,\s]/g,'').trim();if(!s||s.startsWith('#'))return null;const n=parseFloat(s);return isNaN(n)||n<=0?null:n;}
   function parseDate(v){if(!v)return null;const s=String(v).trim();const m1=s.match(/^([A-Za-z]+)\s+(\d+),\s*(\d{4})$/);if(m1){const d=new Date(`${m1[1]} ${m1[2]}, ${m1[3]}`);if(!isNaN(d))return d;}const m2=s.match(/^(\d+)\s+([A-Za-z]+),\s*(\d{4})$/);if(m2){const d=new Date(`${m2[2]} ${m2[1]}, ${m2[3]}`);if(!isNaN(d))return d;}return null;}
