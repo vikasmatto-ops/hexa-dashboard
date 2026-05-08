@@ -1023,6 +1023,17 @@ function parseCSVRow(line){const result=[];let cur='';let inQ=false;for(let i=0;
 function parseCSV(text){const lines=text.trim().split('\n');const headers=parseCSVRow(lines[0]);return lines.slice(1).map(line=>{const vals=parseCSVRow(line);const obj={};headers.forEach((h,i)=>obj[h.trim()]=(vals[i]||'').trim());return obj;}).filter(r=>Object.values(r).some(v=>v));}
 function processData(csv1,csv2){
   const h1rows=parseCSV(csv1),h2rows=parseCSV(csv2);
+  // Log ALL column names from live sheet
+  if(h1rows.length>0){
+    const allKeys=Object.keys(h1rows[0]);
+    console.log('=== LIVE SHEET COLUMNS ===');
+    allKeys.forEach((k,i)=>console.log(i+': ['+k+'] len='+k.length));
+    const artemis=h1rows.find(r=>(r['Hospital Name']||'').toLowerCase().includes('artemis nfc'));
+    if(artemis){
+      console.log('=== ARTEMIS NFC ===');
+      allKeys.forEach(k=>{if(artemis[k]&&artemis[k]!=='') console.log('['+k+']='+artemis[k]);});
+    }
+  }
 
   const TPA_COLS=['EWA- VOLO','ERICSSON','FHPL','Genins','ghpl','Health India TPA','Health Ins (HITPA)','Heritage Health','md india','Med Save','Medi Assist','Paramount','Park Mediclaim','Raksha','Safeway','Medvantage TPA','Vidal TPA','Vipul'];
   const INS_COLS=['Aditya Birla','Bajaj Allianz','Care','Cholamandalam','Future generali','GO DIGIT','HDFC ERGO','ICICI Lombard','Iffco Tokio','Kotak General','LIBERTY','MAGMA HDI','Max Bupa','NAVI','Reliance General','Star Health','Zuno Insurance','SBI','TATA AIG','Universal sompo'];
@@ -1101,7 +1112,7 @@ async function tryLiveRefresh(){
     const pg=document.querySelector('.page.active');
     if(pg&&pg.id==='page-hospital')renderHospitalPage();
     else if(pg&&pg.id==='page-asp')renderASPPage();
-    showRefreshBadge('✅ Live — '+live.hospitals.length+' hospitals • '+live.stats.total_cases.toLocaleString()+' cases');
+    showRefreshBadge('✅ Live ASP data — '+live.stats.total_cases.toLocaleString()+' cases • '+live.hospitals.length+' hospitals');
   }catch(e){showRefreshBadge('📦 Cached data');}
 }
 function showRefreshBadge(msg){
